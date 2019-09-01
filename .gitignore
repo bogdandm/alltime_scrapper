@@ -1,0 +1,7 @@
+.idea/
+venv
+*.pyc
+*.sqlite3
+*.sqlite3-journal
+sandbox.*
+*.lock
