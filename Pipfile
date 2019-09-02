@@ -12,6 +12,8 @@ requests-html = "*"
 aiohttp = "*"
 tqdm = "*"
 attrs = "*"
+django = "*"
+ray = "*"
 
 [requires]
 python_version = "3.7"

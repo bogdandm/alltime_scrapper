@@ -36,10 +36,10 @@ class BaseDownloader:
                     return response.status, await response.read()
 
     async def run(self):
-        await asyncio.wait(
+        await asyncio.wait([
             self._run(url)
             for url in self.urls
-        )
+        ])
         await self.queue.put(StopIteration())
 
     async def _run(self, url):

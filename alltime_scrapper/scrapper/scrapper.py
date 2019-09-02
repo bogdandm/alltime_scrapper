@@ -16,27 +16,26 @@ class BaseScrapper(metaclass=ABCMeta):
 
     async def run(self):
         # TODO: Rewrite to `ray`
+        model = None
         self.tqdm = tqdm(total=0, ncols=TERMINAL_WIDTH)
-        models = []
         while True:
             html = await self.downloader.queue.get()
             self.tqdm.refresh()
             if isinstance(html, StopIteration):
                 break
 
-            models_current = list(self.process_html(html))
-            models.extend(models_current)
-            self.tqdm.total += len(models_current)
+            models = list(self.process_html(html))
+            model = type(models[0])
+            self.tqdm.total += len(models)
             self.tqdm.refresh()
+
+            await model.bulk_save(*models)
+
+            self.tqdm.update(len(models))
             self.downloader.queue.task_done()
 
-        batch_size = 50
-        model = type(models[0])
-        for i in range(0, len(models), batch_size):
-            batch = models[i:i + batch_size]
-            await model.bulk_save(*batch)
-            self.tqdm.update(len(batch))
-        await model.post_process()
+        if model:
+            await model.post_process()
 
     @abstractmethod
     def process_html(self, html: str) -> Generator[BaseSqliteModel, Any, Any]:

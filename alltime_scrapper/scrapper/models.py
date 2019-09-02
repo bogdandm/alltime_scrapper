@@ -1,3 +1,4 @@
+import asyncio
 from itertools import chain
 from sqlite3 import IntegrityError
 from typing import Any, ClassVar, Dict, Iterable
@@ -11,6 +12,7 @@ from const import DB_PATH
 @attr.s(auto_attribs=True)
 class BaseSqliteModel:
     __table_name__: ClassVar[str] = None
+    __db_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
 
     @property
     def to_dict(self) -> Dict[str, Any]:
@@ -26,12 +28,7 @@ class BaseSqliteModel:
             INSERT INTO {table}({", ".join(d.keys())})
             VALUES ({', '.join('?' for _ in d.keys())})
         """
-        try:
-            async with aiosqlite.connect(str(DB_PATH)) as db:
-                await db.execute(sql, list(d.values()))
-                await db.commit()
-        except IntegrityError:
-            pass
+        await self.execute(sql, *d.values())
 
     @classmethod
     async def bulk_save(cls, *objects: 'BaseSqliteModel'):
@@ -41,12 +38,7 @@ class BaseSqliteModel:
             INSERT INTO {cls.__table_name__}({", ".join(dicts[0].keys())})
             VALUES {', '.join([values_pattern] * len(objects))}
         """
-        try:
-            async with aiosqlite.connect(str(DB_PATH)) as db:
-                await db.execute(sql, list(chain.from_iterable(map(dict.values, dicts))))
-                await db.commit()
-        except IntegrityError:
-            pass
+        await cls.execute(sql, *chain.from_iterable(map(dict.values, dicts)))
 
     @classmethod
     async def post_process(cls, unique_fields: Iterable[str] = ()):
@@ -58,12 +50,17 @@ class BaseSqliteModel:
                GROUP BY {', '.join(unique_fields)}
             )
         """
-        try:
-            async with aiosqlite.connect(str(DB_PATH)) as db:
-                await db.execute(sql)
-                await db.commit()
-        except IntegrityError:
-            pass
+        await cls.execute(sql)
+
+    @classmethod
+    async def execute(cls, sql, *params):
+        async with cls.__db_lock:
+            try:
+                async with aiosqlite.connect(str(DB_PATH)) as db:
+                    await db.execute(sql, params)
+                    await db.commit()
+            except IntegrityError:
+                pass
 
 
 @attr.s(auto_attribs=True)
