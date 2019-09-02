@@ -48,10 +48,12 @@ class BaseDownloader:
 
     async def _run(self, url):
         status, html = await self.fetch(url)
-        if status is None or status == 301:
+        if status is None:
+            return
+        self.tqdm.update(1)
+        if status == 301:
             return
         html = html.decode(HTML_ENCODING, errors='replace')
-        self.tqdm.update(1)
         if status == 200 and html:
             await self.queue.put(html)
         else:
