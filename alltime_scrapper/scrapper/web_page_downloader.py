@@ -2,8 +2,9 @@ import asyncio
 from typing import Dict, Iterable, Optional, Tuple
 
 import aiohttp
+from tqdm import tqdm
 
-from const import CATALOG_PAGE, CATALOG_PAGES, HTML_ENCODING, PARALLEL_CONNECTIONS, RETRY_AFTER
+from const import CATALOG_PAGE, CATALOG_PAGES, HTML_ENCODING, PARALLEL_CONNECTIONS, RETRY_AFTER, TERMINAL_WIDTH
 from . import logger
 
 
@@ -14,6 +15,7 @@ class BaseDownloader:
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self.queue: asyncio.Queue[str] = asyncio.Queue(loop=self.loop)
         self._sem = asyncio.Semaphore(PARALLEL_CONNECTIONS)
+        self.tqdm: Optional[tqdm] = None
 
     @property
     def urls(self) -> Iterable[str]:
@@ -36,10 +38,12 @@ class BaseDownloader:
                     return response.status, await response.read()
 
     async def run(self):
-        await asyncio.wait([
+        futures = [
             self._run(url)
             for url in self.urls
-        ])
+        ]
+        self.tqdm = tqdm(desc='Dwnld', total=len(futures), dynamic_ncols=True)
+        await asyncio.wait(futures)
         await self.queue.put(StopIteration())
 
     async def _run(self, url):
@@ -47,6 +51,7 @@ class BaseDownloader:
         if status is None or status == 301:
             return
         html = html.decode(HTML_ENCODING, errors='replace')
+        self.tqdm.update(1)
         if status == 200 and html:
             await self.queue.put(html)
         else:

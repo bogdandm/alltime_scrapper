@@ -4,7 +4,7 @@ from typing import Any, Generator, Optional
 from requests_html import HTML
 from tqdm import tqdm
 
-from const import HTML_ENCODING, TERMINAL_WIDTH
+from const import HTML_ENCODING, TERMINAL_WIDTH, ITEMS_PER_PAGE
 from .models import BaseSqliteModel, CatalogWatch
 from .web_page_downloader import BaseDownloader
 
@@ -13,26 +13,30 @@ class BaseScrapper(metaclass=ABCMeta):
     def __init__(self, downloader: BaseDownloader):
         self.downloader = downloader
         self.tqdm: Optional[tqdm] = None
+        self.done: int = 0
 
     async def run(self):
         # TODO: Rewrite to `ray`
         model = None
-        self.tqdm = tqdm(total=0, ncols=TERMINAL_WIDTH)
+        self.tqdm = tqdm(desc='Parse', total=0, ncols=TERMINAL_WIDTH)
         while True:
             html = await self.downloader.queue.get()
-            self.tqdm.refresh()
             if isinstance(html, StopIteration):
                 break
 
             models = list(self.process_html(html))
             model = type(models[0])
-            self.tqdm.total += len(models)
+            self.tqdm.total = (self.done + self.downloader.queue.qsize()) * ITEMS_PER_PAGE
+            delta = ITEMS_PER_PAGE - len(models)
+            if delta:
+                self.tqdm.total -= delta
             self.tqdm.refresh()
 
             await model.bulk_save(*models)
 
             self.tqdm.update(len(models))
             self.downloader.queue.task_done()
+            self.done += 1
 
         if model:
             await model.post_process()
