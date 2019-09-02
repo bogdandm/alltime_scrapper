@@ -12,7 +12,13 @@ from const import DB_PATH
 @attr.s(auto_attribs=True)
 class BaseSqliteModel:
     __table_name__: ClassVar[str] = None
-    __db_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
+    __db_lock: ClassVar[asyncio.Lock] = None
+
+    @classmethod
+    def _get_lock(cls):
+        if not hasattr(cls, '_lock'):
+            cls.__db_lock = asyncio.Lock()
+        return cls.__db_lock
 
     @property
     def to_dict(self) -> Dict[str, Any]:
@@ -54,7 +60,7 @@ class BaseSqliteModel:
 
     @classmethod
     async def execute(cls, sql, *params):
-        async with cls.__db_lock:
+        async with cls._get_lock():
             try:
                 async with aiosqlite.connect(str(DB_PATH)) as db:
                     await db.execute(sql, params)

@@ -1,12 +1,20 @@
+import asyncio
 from abc import ABCMeta, abstractmethod
-from typing import Any, Generator, Optional
+from typing import Optional, List, Type, Tuple
 
+import ray
+from ray.experimental import async_api as ray_async
 from requests_html import HTML
 from tqdm import tqdm
 
-from const import HTML_ENCODING, TERMINAL_WIDTH, ITEMS_PER_PAGE
+from const import HTML_ENCODING, TERMINAL_WIDTH
 from .models import BaseSqliteModel, CatalogWatch
 from .web_page_downloader import BaseDownloader
+
+
+@ray.remote
+def remote_process_html(cls: Type['BaseScrapper'], html: str) -> List[BaseSqliteModel]:
+    return cls.process_html(html)
 
 
 class BaseScrapper(metaclass=ABCMeta):
@@ -17,59 +25,66 @@ class BaseScrapper(metaclass=ABCMeta):
 
     async def run(self):
         # TODO: Rewrite to `ray`
-        model = None
-        self.tqdm = tqdm(desc='Parse', total=0, ncols=TERMINAL_WIDTH)
+        self.tqdm = tqdm(desc='Parse', total=0, ncols=TERMINAL_WIDTH, unit='items')
+        tasks = []
         while True:
             html = await self.downloader.queue.get()
             if isinstance(html, StopIteration):
                 break
 
-            models = list(self.process_html(html))
-            model = type(models[0])
-            self.tqdm.total = (self.done + self.downloader.queue.qsize()) * ITEMS_PER_PAGE
-            delta = ITEMS_PER_PAGE - len(models)
-            if delta:
-                self.tqdm.total -= delta
-            self.tqdm.refresh()
-
-            await model.bulk_save(*models)
-
-            self.tqdm.update(len(models))
+            tasks.append(asyncio.create_task(self._run(html)))
             self.downloader.queue.task_done()
-            self.done += 1
 
+        models: Tuple[Type[BaseSqliteModel]] = await asyncio.gather(*tasks)
+        model = next(iter(models), None)
         if model:
             await model.post_process()
 
+    async def _run(self, html):
+        models: List[BaseSqliteModel] = await ray_async.as_future(remote_process_html.remote(type(self), html))
+        model = type(models[0])
+
+        await model.bulk_save(*models)
+        self.tqdm.update(len(models))
+
+        self.done += 1
+        return model
+
+    @classmethod
     @abstractmethod
-    def process_html(self, html: str) -> Generator[BaseSqliteModel, Any, Any]:
+    def process_html(cls, html: str) -> List[BaseSqliteModel]:
         yield None
 
-    def process_number(self, x: str):
+    @staticmethod
+    def process_number(x: str):
         return int("".join(filter(
             lambda ch: '0' <= ch <= '9',
             x
         )))
 
-    def _process_html(self, html: str) -> HTML:
+    @staticmethod
+    def _process_html(html: str) -> HTML:
         return HTML(html=html.encode(HTML_ENCODING), default_encoding=HTML_ENCODING)
 
 
 class CatalogScrapper(BaseScrapper):
-    def process_html(self, html: str) -> Generator[CatalogWatch, Any, Any]:
-        html_doc: HTML = self._process_html(html)
+    @classmethod
+    def process_html(cls, html: str) -> List[CatalogWatch]:
+        html_doc: HTML = cls._process_html(html)
+        res: List[CatalogWatch] = []
         for card in html_doc.find('.bcc-post'):
             image = card.find('.bcc-image .first_image', first=True)
             price_new, *price_old = card.find('.bcc-price', first=True).find('li')
             price_old = price_old and price_old[0] or None
             if price_old:
-                price_old = self.process_number(price_old.text)
+                price_old = cls.process_number(price_old.text)
 
-            yield CatalogWatch(
+            res.append(CatalogWatch(
                 name=card.find('.bcc-title', first=True).text.strip().split('\n')[0].strip(),
                 href=image.attrs['data-href'],
                 image_href=image.find('img', first=True).attrs['src'],
-                price=self.process_number(price_new.text),
+                price=cls.process_number(price_new.text),
                 price_old=price_old,
                 text=card.find('.bcc-anons', first=True).text.strip()
-            )
+            ))
+        return res
