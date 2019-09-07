@@ -1,12 +1,12 @@
 import asyncio
 from itertools import chain
-from sqlite3 import IntegrityError
-from typing import Any, ClassVar, Dict, Iterable
+from sqlite3.dbapi2 import IntegrityError
+from typing import ClassVar, Dict, Any, Iterable
 
 import aiosqlite
 import attr
 
-from const import DB_PATH
+from ..const import DB_PATH
 
 
 @attr.s(auto_attribs=True)
@@ -67,19 +67,3 @@ class BaseSqliteModel:
                     await db.commit()
             except IntegrityError:
                 pass
-
-
-@attr.s(auto_attribs=True)
-class CatalogWatch(BaseSqliteModel):
-    __table_name__: ClassVar[str] = 'alltime_catalogwatch'
-
-    name: str
-    href: str
-    image_href: str
-    price: int
-    text: str
-    price_old: int = None
-
-    @classmethod
-    async def post_process(cls, unique_fields: Iterable[str] = ('name', 'href')):
-        await super().post_process(unique_fields)

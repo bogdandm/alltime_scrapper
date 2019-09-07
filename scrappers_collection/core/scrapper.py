@@ -1,15 +1,15 @@
 import asyncio
 from abc import ABCMeta, abstractmethod
-from typing import Optional, List, Type, Tuple
+from typing import List, Optional, Tuple, Type
 
 import ray
 from ray.experimental import async_api as ray_async
 from requests_html import HTML
 from tqdm import tqdm
 
-from const import HTML_ENCODING, TERMINAL_WIDTH
-from .models import BaseSqliteModel, CatalogWatch
-from .web_page_downloader import BaseDownloader
+from .downloader import BaseDownloader
+from .models import BaseSqliteModel
+from ..const import TERMINAL_WIDTH
 
 
 @ray.remote
@@ -63,28 +63,5 @@ class BaseScrapper(metaclass=ABCMeta):
         )))
 
     @staticmethod
-    def _process_html(html: str) -> HTML:
-        return HTML(html=html.encode(HTML_ENCODING), default_encoding=HTML_ENCODING)
-
-
-class CatalogScrapper(BaseScrapper):
-    @classmethod
-    def process_html(cls, html: str) -> List[CatalogWatch]:
-        html_doc: HTML = cls._process_html(html)
-        res: List[CatalogWatch] = []
-        for card in html_doc.find('.bcc-post'):
-            image = card.find('.bcc-image .first_image', first=True)
-            price_new, *price_old = card.find('.bcc-price', first=True).find('li')
-            price_old = price_old and price_old[0] or None
-            if price_old:
-                price_old = cls.process_number(price_old.text)
-
-            res.append(CatalogWatch(
-                name=card.find('.bcc-title', first=True).text.strip().split('\n')[0].strip(),
-                href=image.attrs['data-href'],
-                image_href=image.find('img', first=True).attrs['src'],
-                price=cls.process_number(price_new.text),
-                price_old=price_old,
-                text=card.find('.bcc-anons', first=True).text.strip()
-            ))
-        return res
+    def parse_html(html: str, encoding: str = 'utf-8') -> HTML:
+        return HTML(html=html.encode(encoding), default_encoding=encoding)

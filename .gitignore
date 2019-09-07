@@ -5,3 +5,4 @@ venv
 *.sqlite3-journal
 sandbox.*
 *.lock
+!Pipfile.lock

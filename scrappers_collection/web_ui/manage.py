@@ -5,7 +5,7 @@ import sys
 
 
 def main():
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'alltime_scrapper.django_app.settings')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'scrappers_collection.web_ui.settings')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

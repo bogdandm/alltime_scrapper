@@ -1,20 +1,23 @@
 import asyncio
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Optional, Iterable, Dict, Tuple
 
 import aiohttp
 from tqdm import tqdm
 
-from const import CATALOG_PAGE, CATALOG_PAGES, HTML_ENCODING, PARALLEL_CONNECTIONS, RETRY_AFTER, TERMINAL_WIDTH
 from . import logger
 
 
 class BaseDownloader:
     BASE_URL = None
 
-    def __init__(self):
+    def __init__(self, encoding: str, connections: int, retry_after: float):
+        self.encoding = encoding
+        self.connections = connections
+        self.retry_after = retry_after
+
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self.queue: asyncio.Queue[str] = asyncio.Queue(loop=self.loop)
-        self._sem = asyncio.Semaphore(PARALLEL_CONNECTIONS)
+        self._sem = asyncio.Semaphore(self.connections)
         self.tqdm: Optional[tqdm] = None
 
     @property
@@ -32,7 +35,7 @@ class BaseDownloader:
                 async with session.get(url, allow_redirects=False, **kwargs) as response:
                     logger.info(f"[{response.status}] Fetch {url} {kwargs}")
                     if response.status == 503:
-                        await asyncio.sleep(RETRY_AFTER)
+                        await asyncio.sleep(self.retry_after)
                         await self.fetch(url, **kwargs)
                         return None, None
                     return response.status, await response.read()
@@ -53,26 +56,9 @@ class BaseDownloader:
         self.tqdm.update(1)
         if status == 301:
             return
-        html = html.decode(HTML_ENCODING, errors='replace')
+        html = html.decode(self.encoding, errors='replace')
         if status == 200 and html:
             await self.queue.put(html)
         else:
             logger.warn(f"STATUS => {status}")
             logger.warn(html)
-
-
-class Catalog(BaseDownloader):
-    BASE_URL = CATALOG_PAGE
-
-    @property
-    def urls(self):
-        yield self.BASE_URL
-        for page in range(2, CATALOG_PAGES + 1):
-            yield f"{self.BASE_URL}?PAGEN_1={page}"
-
-    @property
-    def cookies(self):
-        return {
-            "ALLTIME_COUNT_PAGE": "100",
-            "ALLTIME_SORT_BY": "ID"
-        }

@@ -17,7 +17,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    'alltime_scrapper.django_app.alltime',
+    'scrappers_collection.web_ui.alltime',
 ]
 
 MIDDLEWARE = [
@@ -28,7 +28,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
 ]
 
-ROOT_URLCONF = 'alltime_scrapper.django_app.urls'
+ROOT_URLCONF = 'scrappers_collection.web_ui.urls'
 
 TEMPLATES = [
     {
@@ -46,7 +46,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'alltime_scrapper.django_app.wsgi.application'
+WSGI_APPLICATION = 'scrappers_collection.web_ui.wsgi.application'
 
 DATABASES = {
     'default': {
