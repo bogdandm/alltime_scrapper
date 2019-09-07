@@ -6,3 +6,5 @@ venv
 sandbox.*
 *.lock
 !Pipfile.lock
+*.data.json
+*.meta.json

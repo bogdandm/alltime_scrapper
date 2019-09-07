@@ -1,5 +1,5 @@
 import asyncio
-from typing import Optional, Iterable, Dict, Tuple
+from typing import Optional, Iterable, Dict, Tuple, AsyncGenerator, Any
 
 import aiohttp
 from tqdm import tqdm
@@ -8,7 +8,7 @@ from . import logger
 
 
 class BaseDownloader:
-    BASE_URL = None
+    BASE_URL: str = None
 
     def __init__(self, encoding: str, connections: int, retry_after: float):
         self.encoding = encoding
@@ -21,8 +21,8 @@ class BaseDownloader:
         self.tqdm: Optional[tqdm] = None
 
     @property
-    def urls(self) -> Iterable[str]:
-        return [self.BASE_URL]
+    async def urls(self) -> AsyncGenerator[str, Any]:
+        yield self.BASE_URL
 
     @property
     def cookies(self) -> Dict[str, str]:
@@ -43,7 +43,7 @@ class BaseDownloader:
     async def run(self):
         futures = [
             self._run(url)
-            for url in self.urls
+            async for url in self.urls
         ]
         self.tqdm = tqdm(desc='Dwnld', total=len(futures), dynamic_ncols=True)
         await asyncio.wait(futures)

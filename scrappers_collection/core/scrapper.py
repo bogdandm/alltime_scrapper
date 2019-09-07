@@ -24,7 +24,6 @@ class BaseScrapper(metaclass=ABCMeta):
         self.done: int = 0
 
     async def run(self):
-        # TODO: Rewrite to `ray`
         self.tqdm = tqdm(desc='Parse', total=0, ncols=TERMINAL_WIDTH, unit='items')
         tasks = []
         while True:
@@ -38,7 +37,7 @@ class BaseScrapper(metaclass=ABCMeta):
         models: Tuple[Type[BaseSqliteModel]] = await asyncio.gather(*tasks)
         model = next(iter(models), None)
         if model:
-            await model.post_process()
+            await model.drop_duplicates()
 
     async def _run(self, html):
         models: List[BaseSqliteModel] = await ray_async.as_future(remote_process_html.remote(type(self), html))
@@ -53,7 +52,7 @@ class BaseScrapper(metaclass=ABCMeta):
     @classmethod
     @abstractmethod
     def process_html(cls, html: str) -> List[BaseSqliteModel]:
-        yield None
+        return []
 
     @staticmethod
     def process_number(x: str):

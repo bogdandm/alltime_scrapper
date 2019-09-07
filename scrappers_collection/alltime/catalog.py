@@ -1,4 +1,4 @@
-from typing import ClassVar, Iterable, List
+from typing import ClassVar, Iterable, List, Optional
 
 import attr
 from requests_html import HTML
@@ -27,7 +27,7 @@ class CatalogDownloader(BaseDownloader):
 
 
 @attr.s(auto_attribs=True)
-class CatalogWatch(BaseSqliteModel):
+class CatalogWatch(BaseSqliteModel['CatalogWatch']):
     __table_name__: ClassVar[str] = 'alltime_catalogwatch'
 
     name: str
@@ -35,11 +35,12 @@ class CatalogWatch(BaseSqliteModel):
     image_href: str
     price: int
     text: str
-    price_old: int = None
+    price_old: Optional[int] = None
+    id: Optional[int] = None
 
     @classmethod
-    async def post_process(cls, unique_fields: Iterable[str] = ('name', 'href')):
-        await super().post_process(unique_fields)
+    async def drop_duplicates(cls, unique_fields: Iterable[str] = ('name', 'href')):
+        await super().drop_duplicates(unique_fields)
 
 
 class CatalogScrapper(BaseScrapper):

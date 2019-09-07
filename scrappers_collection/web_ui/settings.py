@@ -1,6 +1,6 @@
 import pathlib
 
-from const import DB_PATH
+from ..const import DB_PATH
 
 DJANGO_PATH: pathlib.Path = pathlib.Path(__file__).parent.absolute()
 BASE_PATH: pathlib.Path = DJANGO_PATH.parent
