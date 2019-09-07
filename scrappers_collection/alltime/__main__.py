@@ -5,9 +5,18 @@ async def main():
     catalog = CatalogDownloader(const.HTML_ENCODING, const.PARALLEL_CONNECTIONS, const.RETRY_AFTER)
     catalog_scrapper = CatalogScrapper(catalog)
 
-    catalog_producer = asyncio.create_task(catalog.run())
-    catalog_consumer = asyncio.create_task(catalog_scrapper.run())
-    await asyncio.wait([catalog_producer, catalog_consumer])
+    # producer = asyncio.create_task(catalog.run())
+    # consumer = asyncio.create_task(catalog_scrapper.run())
+    # await asyncio.wait([producer, consumer])
+
+    from .pages import MissingPageDownloader, WatchPageScrapper
+
+    pages = MissingPageDownloader(const.HTML_ENCODING, const.PARALLEL_CONNECTIONS, const.RETRY_AFTER)
+    pages_scrapper = WatchPageScrapper(pages, use_ray=False)
+
+    producer = asyncio.create_task(pages.run())
+    consumer = asyncio.create_task(pages_scrapper.run())
+    await asyncio.wait([producer, consumer])
 
 
 if __name__ == '__main__':

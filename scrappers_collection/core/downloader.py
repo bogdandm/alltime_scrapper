@@ -1,5 +1,6 @@
 import asyncio
-from typing import Optional, Iterable, Dict, Tuple, AsyncGenerator, Any
+from collections import defaultdict
+from typing import Any, AsyncGenerator, Dict, Optional, Tuple
 
 import aiohttp
 from tqdm import tqdm
@@ -14,9 +15,13 @@ class BaseDownloader:
         self.encoding = encoding
         self.connections = connections
         self.retry_after = retry_after
+        self.context: Dict[str, Dict[str, Any]] = defaultdict(dict)
 
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
-        self.queue: asyncio.Queue[str] = asyncio.Queue(loop=self.loop)
+        self.queue: asyncio.Queue[Tuple[
+            Optional[Dict[str, Any]],
+            str
+        ]] = asyncio.Queue(loop=self.loop)
         self._sem = asyncio.Semaphore(self.connections)
         self.tqdm: Optional[tqdm] = None
 
@@ -47,7 +52,7 @@ class BaseDownloader:
         ]
         self.tqdm = tqdm(desc='Dwnld', total=len(futures), dynamic_ncols=True)
         await asyncio.wait(futures)
-        await self.queue.put(StopIteration())
+        await self.queue.put((None, StopIteration()))
 
     async def _run(self, url):
         status, html = await self.fetch(url)
@@ -58,7 +63,7 @@ class BaseDownloader:
             return
         html = html.decode(self.encoding, errors='replace')
         if status == 200 and html:
-            await self.queue.put(html)
+            await self.queue.put((self.context.get(url, None), html))
         else:
             logger.warn(f"STATUS => {status}")
             logger.warn(html)

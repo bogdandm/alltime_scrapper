@@ -45,7 +45,7 @@ class CatalogWatch(BaseSqliteModel['CatalogWatch']):
 
 class CatalogScrapper(BaseScrapper):
     @classmethod
-    def process_html(cls, html: str) -> List[CatalogWatch]:
+    def process_html(cls, html: str, context=None) -> List[CatalogWatch]:
         html_doc: HTML = cls.parse_html(html, encoding=HTML_ENCODING)
         res: List[CatalogWatch] = []
         for card in html_doc.find('.bcc-post'):

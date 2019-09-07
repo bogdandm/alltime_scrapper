@@ -1,6 +1,6 @@
 import asyncio
 from abc import ABCMeta, abstractmethod
-from typing import List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 import ray
 from ray.experimental import async_api as ray_async
@@ -13,13 +13,14 @@ from ..const import TERMINAL_WIDTH
 
 
 @ray.remote
-def remote_process_html(cls: Type['BaseScrapper'], html: str) -> List[BaseSqliteModel]:
-    return cls.process_html(html)
+def remote_process_html(cls: Type['BaseScrapper'], html: str, context: Dict[str, Any] = None) -> List[BaseSqliteModel]:
+    return cls.process_html(html, context=context)
 
 
 class BaseScrapper(metaclass=ABCMeta):
-    def __init__(self, downloader: BaseDownloader):
+    def __init__(self, downloader: BaseDownloader, use_ray=True):
         self.downloader = downloader
+        self.use_ray = use_ray
         self.tqdm: Optional[tqdm] = None
         self.done: int = 0
 
@@ -27,11 +28,11 @@ class BaseScrapper(metaclass=ABCMeta):
         self.tqdm = tqdm(desc='Parse', total=0, ncols=TERMINAL_WIDTH, unit='items')
         tasks = []
         while True:
-            html = await self.downloader.queue.get()
+            context, html = await self.downloader.queue.get()
             if isinstance(html, StopIteration):
                 break
 
-            tasks.append(asyncio.create_task(self._run(html)))
+            tasks.append(asyncio.create_task(self._run(context, html)))
             self.downloader.queue.task_done()
 
         models: Tuple[Type[BaseSqliteModel]] = await asyncio.gather(*tasks)
@@ -39,9 +40,16 @@ class BaseScrapper(metaclass=ABCMeta):
         if model:
             await model.drop_duplicates()
 
-    async def _run(self, html):
-        models: List[BaseSqliteModel] = await ray_async.as_future(remote_process_html.remote(type(self), html))
-        model = type(models[0])
+    async def _run(self, context, html):
+        if self.use_ray:
+            models: List[BaseSqliteModel] = await ray_async.as_future(remote_process_html.remote(
+                type(self), html, context
+            ))
+        else:
+            models: List[BaseSqliteModel] = self.process_html(html, context)
+        model = type(next(iter(models), None))
+        if model is type(None):
+            return None
 
         await model.bulk_save(*models)
         self.tqdm.update(len(models))
@@ -51,7 +59,7 @@ class BaseScrapper(metaclass=ABCMeta):
 
     @classmethod
     @abstractmethod
-    def process_html(cls, html: str) -> List[BaseSqliteModel]:
+    def process_html(cls, html: str, context: Dict[str, Any] = None) -> List[BaseSqliteModel]:
         return []
 
     @staticmethod
