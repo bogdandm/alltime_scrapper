@@ -22,7 +22,7 @@ class BaseSqliteModel(Generic[InstanceType]):
 
     @classmethod
     def _get_lock(cls):
-        if not hasattr(cls, '_lock'):
+        if not cls.__db_lock:
             cls.__db_lock = asyncio.Lock()
         return cls.__db_lock
 
