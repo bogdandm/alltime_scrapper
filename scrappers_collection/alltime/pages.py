@@ -1,7 +1,7 @@
 from typing import Any, AsyncGenerator, ClassVar, Dict, Iterable, List, Optional, Tuple
 
 import attr
-from requests_html import HTML
+from requests_html import HTML, Element
 
 from .catalog import CatalogWatch
 from .const import DOMAIN, HTML_ENCODING
@@ -43,10 +43,11 @@ class Watch(BaseSqliteModel['Watch']):
     country: Optional[str] = None
     text: str = ''
     id: Optional[int] = None
+    __catalog_page: Optional[CatalogWatch] = None
 
     @property
-    async def catalog_page(self) -> CatalogWatch:
-        if not hasattr(self, '__catalog_page'):
+    async def catalog_page(self) -> Optional[CatalogWatch]:
+        if not self.__catalog_page:
             async for page in CatalogWatch.load(dict(id=self.catalog_page_id)):
                 self.__catalog_page = page
         return self.__catalog_page
@@ -99,9 +100,10 @@ class WatchPageScrapper(BaseScrapper):
     }
 
     @classmethod
-    def process_html(cls, html: str, context: Dict[str, Any] = None) -> List[Watch]:
+    def process_html(cls, html: str, context: Optional[Dict[str, Any]] = None) -> List[Watch]:
+        context: Dict[str, Any] = context or {}
         html_doc: HTML = cls.parse_html(html, encoding=HTML_ENCODING)
-        node = html_doc.find('.col-content', first=True)
+        node: Element = html_doc.find('.col-content', first=True)
         fields: Dict[str, str] = {}
         for row in node.find('.product-accordion div[data-id="2"] table > tr'):
             th, td = row.find('th', first=True), row.find('td', first=True)

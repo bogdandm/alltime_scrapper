@@ -13,7 +13,7 @@ from ..const import TERMINAL_WIDTH
 
 
 @ray.remote
-def remote_process_html(cls: Type['BaseScrapper'], html: str, context: Dict[str, Any] = None) -> List[BaseSqliteModel]:
+def remote_process_html(cls: Type['BaseScrapper'], html: str, context: Optional[Dict[str, Any]] = None) -> List[BaseSqliteModel]:
     return cls.process_html(html, context=context)
 
 
@@ -59,7 +59,7 @@ class BaseScrapper(metaclass=ABCMeta):
 
     @classmethod
     @abstractmethod
-    def process_html(cls, html: str, context: Dict[str, Any] = None) -> List[BaseSqliteModel]:
+    def process_html(cls, html: str, context: Optional[Dict[str, Any]] = None) -> List[BaseSqliteModel]:
         return []
 
     @staticmethod

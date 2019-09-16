@@ -58,7 +58,7 @@ class BaseSqliteModel(Generic[InstanceType]):
         await cls.execute(sql, *chain.from_iterable(map(dict.values, dicts)))
 
     @classmethod
-    async def load(cls, filters: Dict[str, Any] = None) -> AsyncGenerator[InstanceType, Any]:
+    async def load(cls, filters: Optional[Dict[str, Any]] = None) -> AsyncGenerator[InstanceType, Any]:
         filters = filters or {}
         fields = ', '.join(attrib.name for attrib in cls.__attrs_attrs__)
         where = ' AND '.join(filters.keys())

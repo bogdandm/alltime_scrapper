@@ -5,6 +5,8 @@ verify_ssl = true
 
 [dev-packages]
 requests = "*"
+pyre-check = "*"
+django-stubs = "*"
 
 [packages]
 aiosqlite = "==0.10.*"
