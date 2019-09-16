@@ -8,10 +8,12 @@ from tqdm import tqdm
 from . import logger
 
 
+# TODO: Add queue for urls
+
 class BaseDownloader:
     BASE_URL: str = None
 
-    def __init__(self, encoding: str, connections: int, retry_after: float):
+    def __init__(self, encoding: str, connections: int, retry_after: float, queue_maxsize=None):
         self.encoding = encoding
         self.connections = connections
         self.retry_after = retry_after
@@ -21,7 +23,7 @@ class BaseDownloader:
         self.queue: asyncio.Queue[Tuple[
             Optional[Dict[str, Any]],
             str
-        ]] = asyncio.Queue(loop=self.loop)
+        ]] = asyncio.Queue(maxsize=queue_maxsize or 0, loop=self.loop)
         self._sem = asyncio.Semaphore(self.connections)
         self.tqdm: Optional[tqdm] = None
 

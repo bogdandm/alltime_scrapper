@@ -41,7 +41,7 @@ class BaseSqliteModel(Generic[InstanceType]):
         }
         table = self.__table_name__
         sql = f"""
-            INSERT INTO {table}({", ".join(d.keys())})
+            INSERT INTO {table}({", ".join(f"'{f}'" for f in d.keys())})
             VALUES ({', '.join('?' for _ in d.keys())})
         """
         await self.execute(sql, *d.values())
@@ -49,9 +49,10 @@ class BaseSqliteModel(Generic[InstanceType]):
     @classmethod
     async def bulk_save(cls, *objects: InstanceType):
         dicts = [o.to_dict for o in objects]
-        values_pattern = f"({', '.join('?' for _ in dicts[0].keys())})"
+        fields = list(dicts[0].keys())
+        values_pattern = f"({', '.join('?' for _ in fields)})"
         sql = f"""
-            INSERT INTO {cls.__table_name__}({", ".join(dicts[0].keys())})
+            INSERT INTO {cls.__table_name__}({", ".join(f"'{f}'" for f in fields)})
             VALUES {', '.join([values_pattern] * len(objects))}
         """
         await cls.execute(sql, *chain.from_iterable(map(dict.values, dicts)))

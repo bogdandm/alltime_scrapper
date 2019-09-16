@@ -13,7 +13,7 @@ class CatalogDownloader(BaseDownloader):
     BASE_URL = CATALOG_PAGE
 
     @property
-    def urls(self):
+    async def urls(self):
         yield self.BASE_URL
         for page in range(2, CATALOG_PAGES + 1):
             yield f"{self.BASE_URL}?PAGEN_1={page}"

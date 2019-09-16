@@ -12,6 +12,10 @@ from ..core.scrapper import BaseScrapper
 
 class MissingPageDownloader(BaseDownloader):
     BASE_URL = DOMAIN
+    QUEUE_MAXSIZE = 50
+
+    def __init__(self, encoding: str, connections: int, retry_after: float):
+        super().__init__(encoding, connections, retry_after, queue_maxsize=self.QUEUE_MAXSIZE)
 
     @property
     async def urls(self) -> AsyncGenerator[str, Any]:
@@ -78,8 +82,8 @@ class WatchPageScrapper(BaseScrapper):
         'Калибр': ...,
         'Технические особенности': ...,
 
-        'Камень-вставка': None,
-        'Общий вес золота (г)': None,
+        'Камень-вставка': ...,
+        'Общий вес золота (г)': ...,
 
         'Тип механизма': 'core_type',
         'Корпус': 'case',
@@ -98,6 +102,7 @@ class WatchPageScrapper(BaseScrapper):
     def process_html(cls, html: str, context: Dict[str, Any] = None) -> List[Watch]:
         html_doc: HTML = cls.parse_html(html, encoding=HTML_ENCODING)
         node = html_doc.find('.col-content', first=True)
+        fields: Dict[str, str] = {}
         for row in node.find('.product-accordion div[data-id="2"] table > tr'):
             th, td = row.find('th', first=True), row.find('td', first=True)
             td.pq('td').find('.js-hintme-this').remove()
@@ -105,8 +110,12 @@ class WatchPageScrapper(BaseScrapper):
             value = td.text.strip()
             if key not in cls._mapping:
                 print(key, '->', value)
-        return []
-        # Watch(
-        #     catalog_page_id=context.get('catalog_id', None),
-        #     core_type=
-        # )
+            else:
+                field = cls._mapping[key]
+                if field is Ellipsis:
+                    continue
+                fields[cls._mapping[key]] = value
+        return [Watch(
+            catalog_page_id=context.get('catalog_id', None),
+            **fields
+        )]
