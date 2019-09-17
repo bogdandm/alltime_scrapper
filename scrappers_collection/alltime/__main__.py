@@ -2,7 +2,12 @@ async def main():
     from . import const
     from .catalog import CatalogDownloader, CatalogScrapper
 
-    catalog = CatalogDownloader(const.HTML_ENCODING, const.PARALLEL_CONNECTIONS, const.RETRY_AFTER)
+    catalog = CatalogDownloader(
+        encoding=const.HTML_ENCODING,
+        connections=const.PARALLEL_CONNECTIONS,
+        retry_after=const.RETRY_AFTER,
+        queue_maxsize=const.CATALOG_QUEUE,
+    )
     catalog_scrapper = CatalogScrapper(catalog)
 
     producer = asyncio.create_task(catalog.run())
@@ -11,7 +16,12 @@ async def main():
 
     from .pages import MissingPageDownloader, WatchPageScrapper
 
-    pages = MissingPageDownloader(const.HTML_ENCODING, const.PARALLEL_CONNECTIONS, const.RETRY_AFTER)
+    pages = MissingPageDownloader(
+        encoding=const.HTML_ENCODING,
+        connections=const.PARALLEL_CONNECTIONS,
+        retry_after=const.RETRY_AFTER,
+        queue_maxsize=const.PAGES_QUEUE
+    )
     pages_scrapper = WatchPageScrapper(pages)
 
     producer = asyncio.create_task(pages.run())

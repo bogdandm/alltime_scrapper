@@ -8,24 +8,25 @@ from tqdm import tqdm
 from . import logger
 
 
-# TODO: Add queue for urls
-
 class BaseDownloader:
     BASE_URL: str = None
 
-    def __init__(self, encoding: str, connections: int, retry_after: float, queue_maxsize=None):
+    def __init__(self, encoding: str, connections: int, retry_after: float, queue_maxsize=100):
         self.encoding = encoding
         self.connections = connections
         self.retry_after = retry_after
         self.context: Dict[str, Dict[str, Any]] = defaultdict(dict)
+        self.queue_maxsize = queue_maxsize
 
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self.queue: asyncio.Queue[Tuple[
             Optional[Dict[str, Any]],
             str
-        ]] = asyncio.Queue(maxsize=queue_maxsize or 0, loop=self.loop)
+        ]] = asyncio.Queue(maxsize=self.queue_maxsize, loop=self.loop)
         self._sem = asyncio.Semaphore(self.connections)
+
         self.tqdm: Optional[tqdm] = None
+        self.start_download: int = 0
 
     @property
     async def urls(self) -> AsyncGenerator[str, Any]:
@@ -48,12 +49,13 @@ class BaseDownloader:
                     return response.status, await response.read()
 
     async def run(self):
-        futures = [
-            self._run(url)
-            async for url in self.urls
-        ]
-        self.tqdm = tqdm(desc='Dwnld', total=len(futures), dynamic_ncols=True)
-        await asyncio.wait(futures)
+        urls = [url async for url in self.urls]
+        self.tqdm = tqdm(desc='Dwnld', total=len(urls), dynamic_ncols=True)
+        batch_size = self.connections * 2
+        for i in range(0, len(urls), batch_size):
+            batch = urls[i:i + batch_size]
+            self.start_download += len(batch)
+            await asyncio.wait([self._run(url) for url in batch])
         await self.queue.put((None, StopIteration()))
 
     async def _run(self, url):

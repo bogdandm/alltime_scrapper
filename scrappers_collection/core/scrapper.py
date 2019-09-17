@@ -1,4 +1,5 @@
 import asyncio
+import multiprocessing
 from abc import ABCMeta, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Type
 
@@ -13,27 +14,34 @@ from ..const import TERMINAL_WIDTH
 
 
 @ray.remote
-def remote_process_html(cls: Type['BaseScrapper'], html: str, context: Optional[Dict[str, Any]] = None) -> List[BaseSqliteModel]:
+def remote_process_html(cls: Type['BaseScrapper'], html: str, context: Optional[Dict[str, Any]] = None) \
+        -> List[BaseSqliteModel]:
     return cls.process_html(html, context=context)
 
 
+CPU_COUNT = multiprocessing.cpu_count()
+
+
 class BaseScrapper(metaclass=ABCMeta):
-    def __init__(self, downloader: BaseDownloader, use_ray=True):
+    def __init__(self, downloader: BaseDownloader, use_ray=True, parallel_tasks=CPU_COUNT * 2):
         self.downloader = downloader
         self.use_ray = use_ray
         self.tqdm: Optional[tqdm] = None
-        self.done: int = 0
+        self._sem = asyncio.Semaphore(parallel_tasks)
 
     async def run(self):
         self.tqdm = tqdm(desc='Parse', total=0, ncols=TERMINAL_WIDTH, unit='items')
         tasks = []
         while True:
+            self.tqdm.total = self.downloader.start_download
+            self.tqdm.update(0)
+
+            await self._sem.acquire()
             context, html = await self.downloader.queue.get()
             if isinstance(html, StopIteration):
                 break
 
             tasks.append(asyncio.create_task(self._run(context, html)))
-            self.downloader.queue.task_done()
 
         models: Tuple[Type[BaseSqliteModel]] = await asyncio.gather(*tasks)
         model = next(iter(models), None)
@@ -52,9 +60,11 @@ class BaseScrapper(metaclass=ABCMeta):
             return None
 
         await model.bulk_save(*models)
-        self.tqdm.update(len(models))
 
-        self.done += 1
+        self.downloader.queue.task_done()
+        self._sem.release()
+        self.tqdm.update(1)
+
         return model
 
     @classmethod

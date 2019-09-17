@@ -31,7 +31,17 @@ class BaseSqliteModel(Generic[InstanceType]):
         return {
             attrib.name: getattr(self, attrib.name)
             for attrib in self.__attrs_attrs__
+            if not attrib.name.startswith('_')
         }
+
+    @property
+    @classmethod
+    def columns(cls):
+        return [
+            attrib.name
+            for attrib in cls.__attrs_attrs__
+            if not attrib.name.startswith('_')
+        ]
 
     async def save(self, *fields):
         d = {
@@ -60,9 +70,8 @@ class BaseSqliteModel(Generic[InstanceType]):
     @classmethod
     async def load(cls, filters: Optional[Dict[str, Any]] = None) -> AsyncGenerator[InstanceType, Any]:
         filters = filters or {}
-        fields = ', '.join(attrib.name for attrib in cls.__attrs_attrs__)
         where = ' AND '.join(filters.keys())
-        sql = f"SELECT {fields} FROM {cls.__table_name__}"
+        sql = f"SELECT {', '.join(cls.columns)} FROM {cls.__table_name__}"
         if where:
             sql += f" WHERE {where}"
 

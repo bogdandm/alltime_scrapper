@@ -12,10 +12,6 @@ from ..core.scrapper import BaseScrapper
 
 class MissingPageDownloader(BaseDownloader):
     BASE_URL = DOMAIN
-    QUEUE_MAXSIZE = 50
-
-    def __init__(self, encoding: str, connections: int, retry_after: float):
-        super().__init__(encoding, connections, retry_after, queue_maxsize=self.QUEUE_MAXSIZE)
 
     @property
     async def urls(self) -> AsyncGenerator[str, Any]:
@@ -43,18 +39,18 @@ class Watch(BaseSqliteModel['Watch']):
     country: Optional[str] = None
     text: str = ''
     id: Optional[int] = None
-    __catalog_page: Optional[CatalogWatch] = None
+    _catalog_page: Optional[CatalogWatch] = None
 
     @property
     async def catalog_page(self) -> Optional[CatalogWatch]:
-        if not self.__catalog_page:
+        if not self._catalog_page:
             async for page in CatalogWatch.load(dict(id=self.catalog_page_id)):
-                self.__catalog_page = page
-        return self.__catalog_page
+                self._catalog_page = page
+        return self._catalog_page
 
     @catalog_page.setter
     async def catalog_page(self, page: CatalogWatch):
-        self.__catalog_page = page
+        self._catalog_page = page
         self.catalog_page_id = page.id
         await self.save('catalog_page_id')
 
