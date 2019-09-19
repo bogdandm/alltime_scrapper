@@ -11,22 +11,21 @@ from . import logger
 class BaseDownloader:
     BASE_URL: str = None
 
-    def __init__(self, encoding: str, connections: int, retry_after: float, queue_maxsize=100):
+    def __init__(self, encoding: str, parallel_downloads: int, retry_after: float, results_queue_maxsize: int):
         self.encoding = encoding
-        self.connections = connections
         self.retry_after = retry_after
         self.context: Dict[str, Dict[str, Any]] = defaultdict(dict)
-        self.queue_maxsize = queue_maxsize
 
         self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
-        self.queue: asyncio.Queue[Tuple[
+        self.download_queue: asyncio.Queue[str] = asyncio.Queue(loop=self.loop)
+        self.results_queue: asyncio.Queue[Tuple[
             Optional[Dict[str, Any]],
             str
-        ]] = asyncio.Queue(maxsize=self.queue_maxsize, loop=self.loop)
-        self._sem = asyncio.Semaphore(self.connections)
+        ]] = asyncio.Queue(maxsize=results_queue_maxsize, loop=self.loop)
+        self._download_lock = asyncio.Semaphore(parallel_downloads, loop=self.loop)
 
         self.tqdm: Optional[tqdm] = None
-        self.start_download: int = 0
+        self.downloaded: int = 0
 
     @property
     async def urls(self) -> AsyncGenerator[str, Any]:
@@ -37,37 +36,40 @@ class BaseDownloader:
         return {}
 
     async def fetch(self, url: str, **kwargs) -> Tuple[Optional[int], Optional[bytes]]:
-        async with self._sem:
-            logger.info(f"Fetch {url} {kwargs}")
-            async with aiohttp.ClientSession(cookies=self.cookies) as session:
-                async with session.get(url, allow_redirects=False, **kwargs) as response:
-                    logger.info(f"[{response.status}] Fetch {url} {kwargs}")
-                    if response.status == 503:
-                        await asyncio.sleep(self.retry_after)
-                        await self.fetch(url, **kwargs)
-                        return None, None
-                    return response.status, await response.read()
+        logger.info(f"Fetch {url} {kwargs}")
+        async with aiohttp.ClientSession(cookies=self.cookies) as session:
+            async with session.get(url, allow_redirects=False, **kwargs) as response:
+                logger.info(f"[{response.status}] Fetch {url} {kwargs}")
+                if response.status == 503:
+                    await asyncio.sleep(self.retry_after)
+                    await self.fetch(url, **kwargs)
+                    return None, None
+                return response.status, await response.read()
 
     async def run(self):
         urls = [url async for url in self.urls]
-        self.tqdm = tqdm(desc='Dwnld', total=len(urls), dynamic_ncols=True)
-        batch_size = self.connections * 2
-        for i in range(0, len(urls), batch_size):
-            batch = urls[i:i + batch_size]
-            self.start_download += len(batch)
-            await asyncio.wait([self._run(url) for url in batch])
-        await self.queue.put((None, StopIteration()))
+        for url in urls:
+            await self.download_queue.put(url)
+        self.tqdm = tqdm(desc='Dwnld', total=len(urls), dynamic_ncols=True, smoothing=.05)
+        tasks = []
+        while self.download_queue.qsize():
+            await self._download_lock.acquire()
+            url = await self.download_queue.get()
+            tasks.append(asyncio.create_task(self._download(url)))
+        await asyncio.wait(tasks)
+        await self.results_queue.put((None, StopIteration()))
 
-    async def _run(self, url):
+    async def _download(self, url):
         status, html = await self.fetch(url)
         if status is None:
             return
         self.tqdm.update(1)
-        if status == 301:
-            return
-        html = html.decode(self.encoding, errors='replace')
-        if status == 200 and html:
-            await self.queue.put((self.context.get(url, None), html))
-        else:
-            logger.warn(f"STATUS => {status}")
-            logger.warn(html)
+        if status != 301:
+            html = html.decode(self.encoding, errors='replace')
+            if status == 200 and html:
+                await self.results_queue.put((self.context.get(url, None), html))
+                self.downloaded += 1
+            else:
+                logger.warn(f"STATUS => {status}")
+                logger.warn(html)
+        self._download_lock.release()

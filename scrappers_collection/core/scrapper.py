@@ -30,14 +30,14 @@ class BaseScrapper(metaclass=ABCMeta):
         self._sem = asyncio.Semaphore(parallel_tasks)
 
     async def run(self):
-        self.tqdm = tqdm(desc='Parse', total=0, ncols=TERMINAL_WIDTH, unit='items')
+        self.tqdm = tqdm(desc='Parse', total=0, ncols=TERMINAL_WIDTH, unit='items', smoothing=.05)
         tasks = []
         while True:
-            self.tqdm.total = self.downloader.start_download
+            self.tqdm.total = self.downloader.downloaded
             self.tqdm.update(0)
 
             await self._sem.acquire()
-            context, html = await self.downloader.queue.get()
+            context, html = await self.downloader.results_queue.get()
             if isinstance(html, StopIteration):
                 break
 
@@ -61,7 +61,7 @@ class BaseScrapper(metaclass=ABCMeta):
 
         await model.bulk_save(*models)
 
-        self.downloader.queue.task_done()
+        self.downloader.results_queue.task_done()
         self._sem.release()
         self.tqdm.update(1)
 

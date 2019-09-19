@@ -4,9 +4,9 @@ async def main():
 
     catalog = CatalogDownloader(
         encoding=const.HTML_ENCODING,
-        connections=const.PARALLEL_CONNECTIONS,
+        parallel_downloads=const.CATALOG_PARALLEL_CONNECTIONS,
         retry_after=const.RETRY_AFTER,
-        queue_maxsize=const.CATALOG_QUEUE,
+        results_queue_maxsize=const.CATALOG_PARSE_QUEUE,
     )
     catalog_scrapper = CatalogScrapper(catalog)
 
@@ -18,9 +18,9 @@ async def main():
 
     pages = MissingPageDownloader(
         encoding=const.HTML_ENCODING,
-        connections=const.PARALLEL_CONNECTIONS,
+        parallel_downloads=const.PAGES_PARALLEL_CONNECTIONS,
         retry_after=const.RETRY_AFTER,
-        queue_maxsize=const.PAGES_QUEUE
+        results_queue_maxsize=const.PAGES_PARSE_QUEUE,
     )
     pages_scrapper = WatchPageScrapper(pages)
 
